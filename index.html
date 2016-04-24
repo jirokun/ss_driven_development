@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8">
+    <base target="_top">
+    <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css" integrity="sha384-1q8mTJOASx8j1Au+a5WDVnPi2lkFfwwEAa8hDDdjZlpLegxhjVME1fgjWPGmkzs7" crossorigin="anonymous"/>
+    <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap-theme.min.css" integrity="sha384-fLW2N01lMqjakBkx3l/M9EahuwpSfeNvV63J5ezn3uZzapT0u7EYsXMjQV+0En5r" crossorigin="anonymous"/>
+    <link rel="stylesheet" href="//code.cloudcms.com/alpaca/1.5.17/bootstrap/alpaca.min.css"/>
+  </head>
+  <body>
+    <div class="container">
+      <div id="form-container"></div>
+    </div>
+    <script src="//ajax.googleapis.com/ajax/libs/jquery/2.2.2/jquery.min.js"></script>
+    <script src="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/js/bootstrap.min.js" integrity="sha384-0mSbJDEHialfmuBBQP6A4Qrprq5OVfW37PRR3j5ELqxss1yVqOtnepnHVP9aJ7xS" crossorigin="anonymous"></script>
+    <script src="//cdnjs.cloudflare.com/ajax/libs/handlebars.js/4.0.5/handlebars.min.js"></script>
+    <script src="//code.cloudcms.com/alpaca/1.5.17/bootstrap/alpaca.js"></script>
+    <script>
+(function() {
+  var viewId = 'bootstrap-create-horizontal';
+  //var viewId = 'bootstrap-create';
+  function buildPage(bi, fd) {
+    var sections = {};
+    var options = { fields: {} };
+    var fields = options.fields;
+    fd.forEach(function(field, i) {
+      var sectionName = field['セクション名'];
+      if (!sections[sectionName]) {
+        sections[sectionName] = {
+          title: sectionName,
+          type: 'object',
+          properties: {},
+        };
+        fields[sectionName] = { fields: {} };
+      }
+      var sectionOptions = fields[sectionName].fields;
+      var properties = sections[sectionName].properties;
+      var type = field['タイプ'];
+      var property = {
+        title: field['項目名'],
+        required: field['必須制限'] === '◯',
+        minimum: field['最小値'],
+        maximum: field['最大値']
+      };
+      var option = {
+        helper: field['下部に表示するテキスト'],
+        popup: field['ポップアップで表示するテキスト'],
+        events: { }
+      }
+      if (type === 'string' || type === 'number') {
+        property.type = type;
+      }
+      if (type === 'radio' || type === 'select') {
+        property.enum = field['選択肢'].split(/,/);
+        option.type = type; // selectにするためにはoptionのtypeを設定する
+      }
+      if (type === 'file') {
+        property.type = 'string';
+        option.type = type; // fileにするためにはoptionのtypeを設定する
+        // fix bug https://github.com/gitana/alpaca/issues/330
+        option.selectionHandler = function(files, data) { this.data = data; };
+      }
+      properties['field' + i] = property;
+      sectionOptions['field' + i] = option;
+    });
+    Alpaca.setDefaultLocale("ja_JP");
+    Object.assign(options, {
+      "renderForm": true,
+      "form": {
+        "buttons": {
+          "submit": {}
+        }
+      },
+      postRender: function(control) {
+        // 正しい場所にレンダリングされないのでクラスを追加
+        this.domEl.find('.help-block').addClass('col-sm-9 col-sm-offset-3');
+        // 完了したら下記を呼び出す必要がある
+        control();
+      }
+    });
+    var config = {
+      "schema": {
+        "title": bi['タイトル'],
+        "type": "object",
+        "properties": sections
+      },
+      "options": options,
+      "view": {
+        "parent": viewId,
+        "callbacks": {
+          addMessage: function() {
+            this.domEl.find('.help-block').addClass('col-sm-9 col-sm-offset-3');
+          },
+          field: function() {
+            this.field.popover({
+              content: this.options.popup,
+              placement: 'top',
+              trigger: 'hover'
+            });
+          }
+        }
+      },
+      "postRender": function(renderedField) {
+        var form = renderedField.form;
+        if (form) {
+          form.registerSubmitHandler(function(e) {
+            return (renderedField.isValid(true));
+          });
+        }
+      }
+    };
+    var $el = $("#form-container").alpaca(config);
+    var additionalScript = bi['追加のスクリプト'];
+    var func = new Function('$el', additionalScript);
+    func($el);
+  }
+  var ssId = '<?= ssId ?>';
+  google.script.run.withSuccessHandler(function(basicInformation) {
+    google.script.run.withSuccessHandler(function(formDefinition) {
+      buildPage(basicInformation, formDefinition);
+    }).getFormDefinition(ssId);
+  }).getBasicInformation(ssId);
+})();
+    </script>
+  </body>
+</html>
