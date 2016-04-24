@@ -20,8 +20,17 @@
   var viewId = 'bootstrap-create-horizontal';
   //var viewId = 'bootstrap-create';
   function buildPage(bi, fd) {
-    var sections = {};
-    var options = { fields: {} };
+    var sections = {ssId: {
+      type: 'string'
+    }};
+    var options = { fields: {
+      ssId: {
+        type: 'hidden'
+      }
+    }};
+    var data = {
+      ssId: ssId
+    };
     var fields = options.fields;
     fd.forEach(function(field, i) {
       var sectionName = field['セクション名'];
@@ -60,15 +69,26 @@
         // fix bug https://github.com/gitana/alpaca/issues/330
         option.selectionHandler = function(files, data) { this.data = data; };
       }
-      properties['field' + i] = property;
-      sectionOptions['field' + i] = option;
+      properties[field['項目名']] = property;
+      sectionOptions[field['項目名']] = option;
     });
     Alpaca.setDefaultLocale("ja_JP");
     Object.assign(options, {
       "renderForm": true,
       "form": {
         "buttons": {
-          "submit": {}
+          "submit": {
+            "title": "送信",
+            "click": function() {
+              var val = this.getValue();
+              var form = this.form;
+              if (this.isValid(true)) {
+                google.script.run.withSuccessHandler(function() {
+                  console.log('Success');
+                }).submitForm(form[0]);
+              }
+            }
+          }
         }
       },
       postRender: function(control) {
@@ -85,6 +105,7 @@
         "properties": sections
       },
       "options": options,
+      data: data,
       "view": {
         "parent": viewId,
         "callbacks": {
@@ -107,6 +128,8 @@
             return (renderedField.isValid(true));
           });
         }
+        // ssidをセットする。何故かdataではセットできなかった
+        document.getElementsByName('ssId')[0].value = ssId;
       }
     };
     var $el = $("#form-container").alpaca(config);
@@ -117,6 +140,7 @@
   var ssId = '<?= ssId ?>';
   google.script.run.withSuccessHandler(function(basicInformation) {
     google.script.run.withSuccessHandler(function(formDefinition) {
+      console.log(JSON.stringify(basicInformation, null, 2), JSON.stringify(formDefinition, null, 2));
       buildPage(basicInformation, formDefinition);
     }).getFormDefinition(ssId);
   }).getBasicInformation(ssId);
