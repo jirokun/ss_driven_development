@@ -84,7 +84,8 @@
               var form = this.form;
               if (this.isValid(true)) {
                 google.script.run.withSuccessHandler(function() {
-                  console.log('Success');
+                  $('<div class="alert alert-info">登録しました</div>').prependTo('.container');
+                  form.remove()
                 }).submitForm(form[0]);
               }
             }
@@ -140,7 +141,6 @@
   var ssId = '<?= ssId ?>';
   google.script.run.withSuccessHandler(function(basicInformation) {
     google.script.run.withSuccessHandler(function(formDefinition) {
-      console.log(JSON.stringify(basicInformation, null, 2), JSON.stringify(formDefinition, null, 2));
       buildPage(basicInformation, formDefinition);
     }).getFormDefinition(ssId);
   }).getBasicInformation(ssId);
