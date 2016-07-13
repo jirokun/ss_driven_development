@@ -5,145 +5,177 @@
     <base target="_top">
     <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css" integrity="sha384-1q8mTJOASx8j1Au+a5WDVnPi2lkFfwwEAa8hDDdjZlpLegxhjVME1fgjWPGmkzs7" crossorigin="anonymous"/>
     <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap-theme.min.css" integrity="sha384-fLW2N01lMqjakBkx3l/M9EahuwpSfeNvV63J5ezn3uZzapT0u7EYsXMjQV+0En5r" crossorigin="anonymous"/>
-    <link rel="stylesheet" href="//code.cloudcms.com/alpaca/1.5.17/bootstrap/alpaca.min.css"/>
+    <style type="text/css">
+      h3 {
+        border-bottom: 1px solid #ccc;
+      }
+      .help-block {
+        margin: 0;
+      }
+    </style>
   </head>
   <body>
-    <div class="container">
-      <div id="form-container"></div>
+    <div id="container" class="container">
     </div>
     <script src="//ajax.googleapis.com/ajax/libs/jquery/2.2.2/jquery.min.js"></script>
     <script src="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/js/bootstrap.min.js" integrity="sha384-0mSbJDEHialfmuBBQP6A4Qrprq5OVfW37PRR3j5ELqxss1yVqOtnepnHVP9aJ7xS" crossorigin="anonymous"></script>
-    <script src="//cdnjs.cloudflare.com/ajax/libs/handlebars.js/4.0.5/handlebars.min.js"></script>
-    <script src="//code.cloudcms.com/alpaca/1.5.17/bootstrap/alpaca.js"></script>
     <script>
 (function() {
   var viewId = 'bootstrap-create-horizontal';
   //var viewId = 'bootstrap-create';
+  var $container = $('#container');
+  function validateElement(e) {
+    var $formGroup = $(e.target).parents('.form-group');
+    $formGroup.removeClass('has-error');
+    $formGroup.removeClass('has-success');
+    $formGroup.find('.glyphicon-ok').hide();
+    $formGroup.find('.glyphicon-remove').hide();
+    if (!e.target.checkValidity()) {
+      $formGroup.addClass('has-error');
+      $formGroup.find('.glyphicon-remove').show();
+      return;
+    }
+    $formGroup.addClass('has-success');
+    $formGroup.find('.glyphicon-ok').show();
+  }
+  function changeFile(e) {
+    var files = e.target.files;
+    var names = Array.prototype.slice.apply(files).map(function(file) { return file.name; });
+    $(e.target).parents('.input-group').find('input[type="text"]').val(names.join(','));
+  }
   function buildPage(bi, fd) {
-    var sections = {ssId: {
-      type: 'string'
-    }};
-    var options = { fields: {
-      ssId: {
-        type: 'hidden'
-      }
-    }};
-    var data = {
-      ssId: ssId
-    };
-    var fields = options.fields;
-    fd.forEach(function(field, i) {
-      var sectionName = field['セクション名'];
-      if (!sections[sectionName]) {
-        sections[sectionName] = {
-          title: sectionName,
-          type: 'object',
-          properties: {},
-        };
-        fields[sectionName] = { fields: {} };
-      }
-      var sectionOptions = fields[sectionName].fields;
-      var properties = sections[sectionName].properties;
-      var type = field['タイプ'];
-      var property = {
-        title: field['項目名'],
-        required: field['必須制限'] === '◯',
-        minimum: field['最小値'],
-        maximum: field['最大値']
-      };
-      var option = {
-        helper: field['下部に表示するテキスト'],
-        popup: field['ポップアップで表示するテキスト'],
-        events: { }
-      }
-      if (type === 'string' || type === 'number') {
-        property.type = type;
-      }
-      if (type === 'radio' || type === 'select') {
-        property.enum = field['選択肢'].split(/,/);
-        option.type = type; // selectにするためにはoptionのtypeを設定する
-      }
-      if (type === 'file') {
-        property.type = 'string';
-        option.type = type; // fileにするためにはoptionのtypeを設定する
-        // fix bug https://github.com/gitana/alpaca/issues/330
-        option.selectionHandler = function(files, data) { this.data = data; };
-      }
-      properties[field['項目名']] = property;
-      sectionOptions[field['項目名']] = option;
-    });
-    Alpaca.setDefaultLocale("ja_JP");
-    Object.assign(options, {
-      "renderForm": true,
-      "form": {
-        "buttons": {
-          "submit": {
-            "title": "送信",
-            "click": function() {
-              var val = this.getValue();
-              var form = this.form;
-              if (this.isValid(true)) {
-                google.script.run.withSuccessHandler(function() {
-                  $('<div class="alert alert-info">登録しました</div>').prependTo('.container');
-                  form.remove()
-                }).submitForm(form[0]);
-              }
+    function switchForm() {
+      var defs = fd.filter(function(def) { return !!def.showConditionVariable && !!def.showConditionValue });
+      defs.forEach(function(def) {
+        var variable = def.showConditionVariable;
+        var el = $('[name="' + variable + '"]')[0];
+        if (!el) {
+          console.error('name属性が"' + variable + '"のエレメントが見つかりません。定義が誤っている可能性があります');
+          return;
+        }
+        var tagName = el.tagName.toUpperCase();
+        var value;
+        if (tagName === 'INPUT' && el.type === 'radio') {
+          value = $('[name="' + variable + '"]:checked').val();
+        } else if (tagName === 'SELECT') {
+          value = $(el).val();
+        } else {
+          console.error('表示条件に指摘できない要素を表示条件に指定している可能性があります。name属性"' + variable + '"');
+          return;
+        }
+        if (def.showConditionValue === value) {
+          $('[name="' + def.name + '"]').removeAttr('disabled');
+          $('[name="' + def.name + '"]').parents('.form-group').show();
+        } else {
+          $('[name="' + def.name + '"]').attr('disabled', true);
+          $('[name="' + def.name + '"]').parents('.form-group').hide();
+        }
+      });
+    }
+    var $form = $('<form class="form-horizontal" enctype="multipart/form-data"/>').appendTo($container);
+    $form.on('keyup', 'input,select', validateElement);
+    $form.on('change', 'input,select', validateElement);
+    $form.on('keyup', 'input,select', switchForm);
+    $form.on('change', 'input,select', switchForm);
+    $form.on('change', 'input[type="file"]', changeFile);
+    $('<h1/>').text(bi.title).appendTo($form);
+    fd.forEach(function(def, i) {
+      var $formGroup = $('<div class="form-group has-feedback"/>').appendTo($form);
+      if (def.type === 'title') {
+        $('<h3/>').attr('name', def.name).text(def.name).appendTo($formGroup);
+      } else {
+        var $label = $('<label class="col-sm-2 control-label"/>').attr('for', def.name).text(def.name).appendTo($formGroup);
+        var $formItem = $('<div class="col-sm-10"/>').appendTo($formGroup);
+
+        if (def.type === 'text') {
+          var $input = $('<input type="text" class="form-control"/>').attr('name', def.name).appendTo($formItem);
+          if (def.required === true) {
+            $input.attr('required', true);
+          }
+          $('<span class="glyphicon glyphicon-ok form-control-feedback"/>').appendTo($formItem).hide();
+          $('<span class="glyphicon glyphicon-remove form-control-feedback"/>').appendTo($formItem).hide();
+        } else if (def.type === 'number') {
+          var $input = $('<input type="number" class="form-control"/>').attr('name', def.name).appendTo($formItem);
+          if (def.required === true) {
+            $input.attr('required', true);
+          }
+          $('<span class="glyphicon glyphicon-ok form-control-feedback"/>').appendTo($formItem).hide();
+          $('<span class="glyphicon glyphicon-remove form-control-feedback"/>').appendTo($formItem).hide();
+        } else if (def.type === 'radio') {
+          def.choices.forEach(function(choice) {
+            var $radio = $('<div class="radio"/>').appendTo($formItem);
+            var $label = $('<label/>').appendTo($radio);
+            var $input = $('<input type="radio"/>').attr('name', def.name).attr('value', choice).appendTo($label);
+            $('<span/>').text(choice).appendTo($label);
+            if (def.required === true) {
+              $input.attr('required', true);
             }
+          });
+        } else if (def.type === 'checkbox') {
+          def.choices.forEach(function(choice) {
+            var $radio = $('<div class="checkbox"/>').appendTo($formItem);
+            var $label = $('<label/>').appendTo($radio);
+            var $input = $('<input type="checkbox"/>').attr('name', def.name).attr('value', choice).appendTo($label);
+            $('<span/>').text(choice).appendTo($label);
+          });
+        } else if (def.type === 'select') {
+          var $select = $('<select class="form-control"/>').attr('name', def.name).appendTo($formItem);
+          if (def.required === true) {
+            $select.attr('required', true);
           }
+          $('<option/>').appendTo($select);
+          def.choices.forEach(function(choice) {
+            $('<option/>').attr('value', choice).text(choice).appendTo($select);
+          });
+        } else if (def.type === 'file') {
+          var $input = $('<input type="file" class="form-control" multiple/>').attr('name', def.name).appendTo($formItem);
+          if (def.required === true) {
+            $input.attr('required', true);
+          }
+          $('<span class="glyphicon glyphicon-ok form-control-feedback"/>').appendTo($formItem).hide();
+          $('<span class="glyphicon glyphicon-remove form-control-feedback"/>').appendTo($formItem).hide();
         }
-      },
-      postRender: function(control) {
-        // 正しい場所にレンダリングされないのでクラスを追加
-        this.domEl.find('.help-block').addClass('col-sm-9 col-sm-offset-3');
-        // 完了したら下記を呼び出す必要がある
-        control();
+
+        if (def.bottomHTML) {
+          $('<span class="help-block"/>').html(def.bottomHTML).appendTo($formItem);
+        }
       }
     });
-    var config = {
-      "schema": {
-        "title": bi['タイトル'],
-        "type": "object",
-        "properties": sections
-      },
-      "options": options,
-      data: data,
-      "view": {
-        "parent": viewId,
-        "callbacks": {
-          addMessage: function() {
-            this.domEl.find('.help-block').addClass('col-sm-9 col-sm-offset-3');
-          },
-          field: function() {
-            this.field.popover({
-              content: this.options.popup,
-              placement: 'top',
-              trigger: 'hover'
-            });
-          }
-        }
-      },
-      "postRender": function(renderedField) {
-        var form = renderedField.form;
-        if (form) {
-          form.registerSubmitHandler(function(e) {
-            return (renderedField.isValid(true));
-          });
-        }
-        // ssidをセットする。何故かdataではセットできなかった
-        document.getElementsByName('ssId')[0].value = ssId;
-      }
-    };
-    var $el = $("#form-container").alpaca(config);
-    var additionalScript = bi['追加のスクリプト'];
-    var func = new Function('$el', additionalScript);
-    func($el);
+    (function() {
+      var $formGroup = $('<div class="form-group"/>').appendTo($form);
+      var $formItem = $('<div class="col-sm-offset-2 col-sm-10"/>').appendTo($formGroup);
+      var $submitButton = $('<button type="submit" class="btn btn-primary">送信</button>').appendTo($formItem);
+    })();
+    switchForm();
   }
   var ssId = '<?= ssId ?>';
-  google.script.run.withSuccessHandler(function(basicInformation) {
-    google.script.run.withSuccessHandler(function(formDefinition) {
-      buildPage(basicInformation, formDefinition);
-    }).getFormDefinition(ssId);
-  }).getBasicInformation(ssId);
+  if (location.href.indexOf('localhost') !== -1) {
+    var basicInfomation = {
+      title: 'テストタイトル',
+      addtionalScript: '',
+      mail: '',
+      mailTitle: ''
+    };
+    var formDefinition = [
+      { name: 'セクション1', type: 'title' },
+      { name: 'テキスト', type: 'text', required: true, bottomHTML: '<span style="color: red;">あい</span>うえお' },
+      { name: 'ラジオ', type: 'radio', required: true, choices: ['選択肢1', '選択肢2'], bottomHTML: '<span style="color: red;">あい</span>うえお' },
+      { name: 'チェックボックス', type: 'checkbox', required: true, choices: ['選択肢1', '選択肢2'], bottomHTML: '<span style="color: red;">あい</span>うえお' },
+      { name: 'セレクト', type: 'select', required: true, choices: ['選択肢1', '選択肢2'], bottomHTML: '<span style="color: red;">あい</span>うえお' },
+      { name: 'ナンバー', type: 'number', required: true, min: 1, max: 100, bottomHTML: '<span style="color: red;">あい</span>うえお' },
+      { name: 'ファイル', type: 'file', required: true, bottomHTML: '<span style="color: red;">あい</span>うえお' },
+      { name: 'セクション2', type: 'title', showConditionVariable: 'ラジオ', showConditionValue: '選択肢1' },
+      { name: 'file2', type: 'file', required: true, bottomHTML: '<span style="color: red;">あい</span>うえお', showConditionVariable: 'ラジオ', showConditionValue: '選択肢1' },
+      { name: 'number2', type: 'number', required: true, showConditionVariable: 'セレクト', showConditionValue: '選択肢1' },
+    ];
+    buildPage(basicInfomation, formDefinition);
+  } else {
+    google.script.run.withSuccessHandler(function(basicInfomation) {
+      google.script.run.withSuccessHandler(function(formDefinition) {
+        buildPage(basicInfomation, formDefinition);
+      }).getFormDefinition(ssId);
+    }).getBasicInformation(ssId);
+  }
 })();
     </script>
   </body>
