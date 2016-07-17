@@ -12,18 +12,60 @@
       .help-block {
         margin: 0;
       }
+      .popover{
+        max-width: 100%;
+      }
+      .loading-overlay {
+        width: 100%;
+        height: 100%;
+        position: fixed;
+        top: 0;
+        left: 0;
+        opacity: 0.5;
+        background-color: #000;
+      }
+      #progress {
+        margin-top: 100px;
+      }
     </style>
   </head>
   <body>
     <div id="container" class="container">
+      <div id="progress" class="progress">
+        <div class="progress-bar progress-bar-striped active" style="width: 0%">
+          <span class="sr-only">0% Complete</span>
+        </div>
+      </div>
     </div>
     <script src="//ajax.googleapis.com/ajax/libs/jquery/2.2.2/jquery.min.js"></script>
     <script src="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/js/bootstrap.min.js" integrity="sha384-0mSbJDEHialfmuBBQP6A4Qrprq5OVfW37PRR3j5ELqxss1yVqOtnepnHVP9aJ7xS" crossorigin="anonymous"></script>
     <script>
+// http://spin.js.org/#v2.3.2
+!function(a,b){"object"==typeof module&&module.exports?module.exports=b():"function"==typeof define&&define.amd?define(b):a.Spinner=b()}(this,function(){"use strict";function a(a,b){var c,d=document.createElement(a||"div");for(c in b)d[c]=b[c];return d}function b(a){for(var b=1,c=arguments.length;c>b;b++)a.appendChild(arguments[b]);return a}function c(a,b,c,d){var e=["opacity",b,~~(100*a),c,d].join("-"),f=.01+c/d*100,g=Math.max(1-(1-a)/b*(100-f),a),h=j.substring(0,j.indexOf("Animation")).toLowerCase(),i=h&&"-"+h+"-"||"";return m[e]||(k.insertRule("@"+i+"keyframes "+e+"{0%{opacity:"+g+"}"+f+"%{opacity:"+a+"}"+(f+.01)+"%{opacity:1}"+(f+b)%100+"%{opacity:"+a+"}100%{opacity:"+g+"}}",k.cssRules.length),m[e]=1),e}function d(a,b){var c,d,e=a.style;if(b=b.charAt(0).toUpperCase()+b.slice(1),void 0!==e[b])return b;for(d=0;d<l.length;d++)if(c=l[d]+b,void 0!==e[c])return c}function e(a,b){for(var c in b)a.style[d(a,c)||c]=b[c];return a}function f(a){for(var b=1;b<arguments.length;b++){var c=arguments[b];for(var d in c)void 0===a[d]&&(a[d]=c[d])}return a}function g(a,b){return"string"==typeof a?a:a[b%a.length]}function h(a){this.opts=f(a||{},h.defaults,n)}function i(){function c(b,c){return a("<"+b+' xmlns="urn:schemas-microsoft.com:vml" class="spin-vml">',c)}k.addRule(".spin-vml","behavior:url(#default#VML)"),h.prototype.lines=function(a,d){function f(){return e(c("group",{coordsize:k+" "+k,coordorigin:-j+" "+-j}),{width:k,height:k})}function h(a,h,i){b(m,b(e(f(),{rotation:360/d.lines*a+"deg",left:~~h}),b(e(c("roundrect",{arcsize:d.corners}),{width:j,height:d.scale*d.width,left:d.scale*d.radius,top:-d.scale*d.width>>1,filter:i}),c("fill",{color:g(d.color,a),opacity:d.opacity}),c("stroke",{opacity:0}))))}var i,j=d.scale*(d.length+d.width),k=2*d.scale*j,l=-(d.width+d.length)*d.scale*2+"px",m=e(f(),{position:"absolute",top:l,left:l});if(d.shadow)for(i=1;i<=d.lines;i++)h(i,-2,"progid:DXImageTransform.Microsoft.Blur(pixelradius=2,makeshadow=1,shadowopacity=.3)");for(i=1;i<=d.lines;i++)h(i);return b(a,m)},h.prototype.opacity=function(a,b,c,d){var e=a.firstChild;d=d.shadow&&d.lines||0,e&&b+d<e.childNodes.length&&(e=e.childNodes[b+d],e=e&&e.firstChild,e=e&&e.firstChild,e&&(e.opacity=c))}}var j,k,l=["webkit","Moz","ms","O"],m={},n={lines:12,length:7,width:5,radius:10,scale:1,corners:1,color:"#000",opacity:.25,rotate:0,direction:1,speed:1,trail:100,fps:20,zIndex:2e9,className:"spinner",top:"50%",left:"50%",shadow:!1,hwaccel:!1,position:"absolute"};if(h.defaults={},f(h.prototype,{spin:function(b){this.stop();var c=this,d=c.opts,f=c.el=a(null,{className:d.className});if(e(f,{position:d.position,width:0,zIndex:d.zIndex,left:d.left,top:d.top}),b&&b.insertBefore(f,b.firstChild||null),f.setAttribute("role","progressbar"),c.lines(f,c.opts),!j){var g,h=0,i=(d.lines-1)*(1-d.direction)/2,k=d.fps,l=k/d.speed,m=(1-d.opacity)/(l*d.trail/100),n=l/d.lines;!function o(){h++;for(var a=0;a<d.lines;a++)g=Math.max(1-(h+(d.lines-a)*n)%l*m,d.opacity),c.opacity(f,a*d.direction+i,g,d);c.timeout=c.el&&setTimeout(o,~~(1e3/k))}()}return c},stop:function(){var a=this.el;return a&&(clearTimeout(this.timeout),a.parentNode&&a.parentNode.removeChild(a),this.el=void 0),this},lines:function(d,f){function h(b,c){return e(a(),{position:"absolute",width:f.scale*(f.length+f.width)+"px",height:f.scale*f.width+"px",background:b,boxShadow:c,transformOrigin:"left",transform:"rotate("+~~(360/f.lines*k+f.rotate)+"deg) translate("+f.scale*f.radius+"px,0)",borderRadius:(f.corners*f.scale*f.width>>1)+"px"})}for(var i,k=0,l=(f.lines-1)*(1-f.direction)/2;k<f.lines;k++)i=e(a(),{position:"absolute",top:1+~(f.scale*f.width/2)+"px",transform:f.hwaccel?"translate3d(0,0,0)":"",opacity:f.opacity,animation:j&&c(f.opacity,f.trail,l+k*f.direction,f.lines)+" "+1/f.speed+"s linear infinite"}),f.shadow&&b(i,e(h("#000","0 0 4px #000"),{top:"2px"})),b(d,b(i,h(g(f.color,k),"0 0 1px rgba(0,0,0,.1)")));return d},opacity:function(a,b,c){b<a.childNodes.length&&(a.childNodes[b].style.opacity=c)}}),"undefined"!=typeof document){k=function(){var c=a("style",{type:"text/css"});return b(document.getElementsByTagName("head")[0],c),c.sheet||c.styleSheet}();var o=e(a("group"),{behavior:"url(#default#VML)"});!d(o,"transform")&&o.adj?i():j=d(o,"animation")}return h});
+    </script>
+    <script>
+/** radio, selectの値を取得する。項目名を指定する */
+window.getValue = function(name) {
+  var el = $('[name="' + name + '"]')[0];
+  if (!el) {
+    throw 'name属性が"' + name + '"のエレメントが見つかりません。定義が誤っている可能性があります';
+  }
+  var tagName = el.tagName.toUpperCase();
+  var value;
+  if (tagName === 'INPUT' && el.type === 'radio') {
+    value = $('[name="' + name + '"]:checked').val();
+  } else if (tagName === 'SELECT') {
+    value = $(el).val();
+  } else {
+    throw '表示条件に指摘できない要素を表示条件に指定している可能性があります。name属性"' + name + '"';
+  }
+  return value;
+};
 (function() {
   var viewId = 'bootstrap-create-horizontal';
   //var viewId = 'bootstrap-create';
   var $container = $('#container');
+  var $progress = $('#progress .progress-bar');
   function validateElement(e) {
     var $formGroup = $(e.target).parents('.form-group');
     $formGroup.removeClass('has-error');
@@ -40,35 +82,71 @@
   }
   function changeFile(e) {
     var files = e.target.files;
-    var names = Array.prototype.slice.apply(files).map(function(file) { return file.name; });
-    $(e.target).parents('.input-group').find('input[type="text"]').val(names.join(','));
+    var refname = $(e.target).data('refname');
+    var encodedStr = '';
+    Array.prototype.slice.apply(files).forEach(function(file) {
+      var fr = new FileReader();
+      // filename:mimetype:contents;filename:mimetype:contents;filename:mimetype:contentsという形で格納する
+      fr.onload = function(e) {
+        var dataURI = e.target.result;
+        var m = dataURI.match(/^data:(.*?);base64,(.*)$/);
+        if (!m) {
+          console.error('data uriが期待値と異なります: ' + dataURI.substr(0, 100));
+        }
+        var mimeType = m[1];
+        var base64 = m[2];
+        if (encodedStr == '') {
+          encodedStr = file.name + ":" + mimeType + ':' + base64;
+        } else {
+          encodedStr += ';' + file.name + ":" + mimeType + ':' + base64;
+        }
+        $('[name="' + refname + '"]').val(encodedStr);
+      };
+      fr.readAsDataURL(file);
+    });
   }
-  function buildPage(bi, fd) {
+  function onSubmit(e) {
+    e.preventDefault();
+    var $form = $(e.target);
+    $form.find('[type="file"]').attr('disabled', true);
+    var $overlay = $('<div class="loading-overlay"/>').appendTo(document.body);
+    var spinner = new Spinner().spin(document.body);
+    google.script.run.withSuccessHandler(function() {
+      $('<div class="alert alert-info">登録しました</div>').prependTo('.container');
+      $form.remove();
+      spinner.stop();
+      $overlay.remove();
+    }).submitForm(e.target);
+  }
+  function replaceTemplate(template, extInfo) {
+    if (template == undefined) {
+      return undefined;
+    }
+    for (var prop in extInfo) {
+      var target = '${' + prop + '}';
+      while (template.indexOf(target, 0) !== -1 ) {
+        template = template.replace(target, extInfo[prop]);
+      }
+    }
+    return template;
+  }
+  /** basicInfomation, formDefinitionを元にページを作成する */
+  function buildPage(ssId, bi, fd, extInfo) {
+    /** Formの表示切り替え. showConditionに書かれているJavaScriptを評価して表示非表示を切り替える */
     function switchForm() {
-      var defs = fd.filter(function(def) { return !!def.showConditionVariable && !!def.showConditionValue });
+      var defs = fd.filter(function(def) { return !!def.showCondition });
       defs.forEach(function(def) {
-        var variable = def.showConditionVariable;
-        var el = $('[name="' + variable + '"]')[0];
-        if (!el) {
-          console.error('name属性が"' + variable + '"のエレメントが見つかりません。定義が誤っている可能性があります');
-          return;
-        }
-        var tagName = el.tagName.toUpperCase();
-        var value;
-        if (tagName === 'INPUT' && el.type === 'radio') {
-          value = $('[name="' + variable + '"]:checked').val();
-        } else if (tagName === 'SELECT') {
-          value = $(el).val();
-        } else {
-          console.error('表示条件に指摘できない要素を表示条件に指定している可能性があります。name属性"' + variable + '"');
-          return;
-        }
-        if (def.showConditionValue === value) {
-          $('[name="' + def.name + '"]').removeAttr('disabled');
-          $('[name="' + def.name + '"]').parents('.form-group').show();
-        } else {
-          $('[name="' + def.name + '"]').attr('disabled', true);
-          $('[name="' + def.name + '"]').parents('.form-group').hide();
+        try {
+          var condition = eval(def.showCondition);
+          if (condition) {
+            $('[name="' + def.name + '"]').removeAttr('disabled');
+            $('[name="' + def.name + '"]').parents('.form-group').show();
+          } else {
+            $('[name="' + def.name + '"]').attr('disabled', true);
+            $('[name="' + def.name + '"]').parents('.form-group').hide();
+          }
+        } catch (e) {
+          console.error(e);
         }
       });
     }
@@ -78,9 +156,18 @@
     $form.on('keyup', 'input,select', switchForm);
     $form.on('change', 'input,select', switchForm);
     $form.on('change', 'input[type="file"]', changeFile);
+    $form.on('submit', onSubmit);
+    $('<input name="ssId" type="hidden"/>').attr('value', ssId).appendTo($form);
     $('<h1/>').text(bi.title).appendTo($form);
+    // 各項目を作成する
     fd.forEach(function(def, i) {
       var $formGroup = $('<div class="form-group has-feedback"/>').appendTo($form);
+      $formGroup.popover({
+        content: replaceTemplate(def.tooltip, extInfo),
+        html: true,
+        placement: 'auto bottom',
+        trigger: 'hover'
+      });
       if (def.type === 'title') {
         $('<h3/>').attr('name', def.name).text(def.name).appendTo($formGroup);
       } else {
@@ -128,7 +215,9 @@
             $('<option/>').attr('value', choice).text(choice).appendTo($select);
           });
         } else if (def.type === 'file') {
-          var $input = $('<input type="file" class="form-control" multiple/>').attr('name', def.name).appendTo($formItem);
+          var $input = $('<input type="file" class="form-control" multiple/>').attr('data-refname', def.name).appendTo($formItem);
+          // base64エンコードしたファイルの内容を格納するフィールド
+          $('<input type="hidden" class="form-control"/>').attr('name', def.name).appendTo($formItem);
           if (def.required === true) {
             $input.attr('required', true);
           }
@@ -137,15 +226,17 @@
         }
 
         if (def.bottomHTML) {
-          $('<span class="help-block"/>').html(def.bottomHTML).appendTo($formItem);
+          $('<span class="help-block"/>').html(replaceTemplate(def.bottomHTML, extInfo)).appendTo($formItem);
         }
       }
     });
+    // サブミットボタンを作成する。上記の各項目と名前がぶつからないように匿名関数で囲っている
     (function() {
       var $formGroup = $('<div class="form-group"/>').appendTo($form);
       var $formItem = $('<div class="col-sm-offset-2 col-sm-10"/>').appendTo($formGroup);
       var $submitButton = $('<button type="submit" class="btn btn-primary">送信</button>').appendTo($formItem);
     })();
+    // 最初に表示非表示を初期設定するために一度switchFormを呼び出す
     switchForm();
   }
   var ssId = '<?= ssId ?>';
@@ -157,24 +248,40 @@
       mailTitle: ''
     };
     var formDefinition = [
-      { name: 'セクション1', type: 'title' },
-      { name: 'テキスト', type: 'text', required: true, bottomHTML: '<span style="color: red;">あい</span>うえお' },
-      { name: 'ラジオ', type: 'radio', required: true, choices: ['選択肢1', '選択肢2'], bottomHTML: '<span style="color: red;">あい</span>うえお' },
+      { name: 'セクション1', type: 'title', tooltip: 'Tooltip' },
+      { name: 'テキスト', type: 'text', required: true, bottomHTML: '納期は${納期計算}です' },
+      { name: 'ラジオ', type: 'radio', required: true, choices: ['選択肢1', '選択肢2'], bottomHTML: '<span style="color: red;">あい</span>うえお', tooltip: 'HOGEHOGE' },
       { name: 'チェックボックス', type: 'checkbox', required: true, choices: ['選択肢1', '選択肢2'], bottomHTML: '<span style="color: red;">あい</span>うえお' },
       { name: 'セレクト', type: 'select', required: true, choices: ['選択肢1', '選択肢2'], bottomHTML: '<span style="color: red;">あい</span>うえお' },
       { name: 'ナンバー', type: 'number', required: true, min: 1, max: 100, bottomHTML: '<span style="color: red;">あい</span>うえお' },
       { name: 'ファイル', type: 'file', required: true, bottomHTML: '<span style="color: red;">あい</span>うえお' },
-      { name: 'セクション2', type: 'title', showConditionVariable: 'ラジオ', showConditionValue: '選択肢1' },
-      { name: 'file2', type: 'file', required: true, bottomHTML: '<span style="color: red;">あい</span>うえお', showConditionVariable: 'ラジオ', showConditionValue: '選択肢1' },
-      { name: 'number2', type: 'number', required: true, showConditionVariable: 'セレクト', showConditionValue: '選択肢1' },
+      { name: 'セクション2', type: 'title', showCondition: 'getValue("ラジオ") === "選択肢1"' },
+      { name: 'file2', type: 'file', required: true, bottomHTML: '<span style="color: red;">あい</span>うえお', showCondition: 'getValue("ラジオ") === "選択肢1"' },
+      { name: 'number2', type: 'number', required: true, showCondition: 'getValue("セレクト") === "選択肢1"', tooltip: '<span style="color: red;">This method was tested to work in IE8–IE11 and recent versions of Chrome, Safari, Firefox, and Opera.</span>' },
     ];
-    buildPage(basicInfomation, formDefinition);
+    var extInfo = {
+      "納期計算": "2016-08-02"
+    };
+    $progress.css('width', '100%');
+    buildPage(ssId, basicInfomation, formDefinition, extInfo);
   } else {
+    function failHandler(error) {
+      console.error(error);
+    }
+    console.log('call getBasicInformation');
     google.script.run.withSuccessHandler(function(basicInfomation) {
+      $progress.css('width', '50%');
+      console.log('call getFormDefinition');
       google.script.run.withSuccessHandler(function(formDefinition) {
-        buildPage(basicInfomation, formDefinition);
-      }).getFormDefinition(ssId);
-    }).getBasicInformation(ssId);
+        $progress.css('width', '100%');
+        console.log('call getExtInfo');
+        google.script.run.withSuccessHandler(function(extInfo) {
+          $progress.parent().hide();
+          console.log('buildPage');
+          buildPage(ssId, basicInfomation, formDefinition, extInfo);
+        }).withFailureHandler(failHandler).getExtInfo(ssId);
+      }).withFailureHandler(failHandler).getFormDefinition(ssId);
+    }).withFailureHandler(failHandler).getBasicInformation(ssId);
   }
 })();
     </script>
