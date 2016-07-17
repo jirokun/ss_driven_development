@@ -1,10 +1,22 @@
+var mapping = {
+  '項目名': 'name',
+  'タイプ': 'type',
+  '必須': 'required',
+  '選択肢': 'choices',
+  '表示条件': 'showCondition',
+  '下部に表示するテキスト': 'bottomHTML',
+  'ポップアップで表示するテキスト': 'tooltip'
+};
+var global = {};
+
 /** GET受付. GETのパラメータでssIdを受けつける。SpreadSheetのIDを指定する */
 function doGet(e) {
   var ssId = e.parameter.ssId;
   var t = HtmlService.createTemplateFromFile('Index');
   t.ssId = ssId;
+  var bi = getBasicInformation(ssId);
   return t.evaluate()
-      .setTitle('Form Sample')
+      .setTitle(bi['タイトル'])
       .setSandboxMode(HtmlService.SandboxMode.IFRAME);
 }
 
@@ -33,24 +45,58 @@ function getFormDefinition(ssId) {
     var value = {};
     values.push(value);
     row.forEach(function(cell, i) {
+      value[mapping[header[i]]] = row[i];
+    });
+    value.required = value.required == null || value.required != '';
+    value.choices = value.choices ? value.choices.split(',') : null;
+  });
+  return values;
+}
+
+/** Spreadsheetのシートのデータを配列にして返す */
+function getSheetDataAsArray(ssId, sheetName) {
+  var ss = SpreadsheetApp.openById(ssId);
+  var sheet = ss.getSheetByName(sheetName);
+  var range = sheet.getRange(1, 1, sheet.getLastRow(), sheet.getLastColumn());
+  var header = range.getValues()[0].map(function(cellValue) { return cellValue; });
+  var values = [];
+  var rows = range.getValues();
+  rows.shift();
+  rows.forEach(function(row) {
+    var value = {};
+    row.forEach(function(cell, i) {
       value[header[i]] = row[i];
     });
+    values.push(value);
   });
   return values;
 }
 
 /** HTMLから呼ばれるメソッド. フォームのsubmit処理 */
 function submitForm(form) {
-  Logger.log(form);
   addData(form.ssId, form);
   mailData(form.ssId, form);
+}
+/** 文字列置換をおこなう */
+function replaceTemplate(template, extInfo) {
+  if (template == undefined) {
+    return undefined;
+  }
+  for (var prop in extInfo) {
+    var target = '${' + prop + '}';
+    while (template.indexOf(target, 0) !== -1 ) {
+      template = template.replace(target, extInfo[prop]);
+    }
+  }
+  return template;
 }
 
 /** HTMLから呼ばれるメソッド. Spreadsheetのデータシートにデータを追加する */
 function addData(ssId, form) {
-  var data = normalizeData(form);
+  var data = form;
   var ss = SpreadsheetApp.openById(ssId);
   var sheetData = ss.getSheetByName('データ');
+  var headerDefs = getFormDefinition(ssId);
   var dataHeader = sheetData.getRange(1, 1, 1, sheetData.getLastColumn()).getValues()[0];
   if (!data['作成日時']) {
     data['作成日時'] = new Date();
@@ -58,53 +104,81 @@ function addData(ssId, form) {
   var rowData = dataHeader.map(function(header) { return data[header] || null; });
   sheetData.appendRow(rowData);
 }
+/** formの入力値を取得する. browserでの実行と互換性を持たせるためにメソッド化している */
+function getValue(name) {
+  return global.form[name];
+}
 
 /** HTMLから呼ばれるメソッド. フォームのデータをメールする */
 function mailData(ssId, form) {
-  var data = normalizeData(form);
-  var def = getBasicInformation(ssId);
-  var mailTo = def['メール送付先'];
-  // 設定されていなかったら何もしない
-  if (!mailTo || mailTo === '') return;
-  var mailTitle = def['メールタイトル'];
-  var headers = getFormDefinition(ssId).map(function(row) { return row['項目名']; });
-  var body = "<table>" + headers.map(function(column) {
-    return '<tr><th style="text-align: right;">' + column + '</th><td>' + data[column] + '</td></tr>';
-  }).join('\n') + "</table>";
-  var attachments = [];
-  for (var prop in data) {
-    var d = data[prop];
-    if (d.copyBlob) {
-      // blobと判定する
-      attachments.push(d);
-    }
-  }
-  MailApp.sendEmail({
-    to: mailTo,
-    subject: mailTitle,
-    htmlBody: body,
-    attachments: attachments
+  global.form = form;
+  var mailDefs = getSheetDataAsArray(ssId, 'メール定義');
+  var enabledMail = mailDefs.filter(function(def) {
+    var condition = def['送信条件'];
+    return eval(condition);
+  });
+  var extInfo = getExtInfo(ssId);
+  enabledMail.forEach(function(def) {
+    var title = def['タイトル'];
+    var to = def['宛先'];
+    var body = def['本文'];
+    var attachmentVariables = def['添付ファイル'].split(/,/);
+    // 本文のテンプレート文字を置き換える
+    body = replaceTemplate(body, form);
+    body = replaceTemplate(body, extInfo);
+    var headerDefs = getFormDefinition(ssId);
+    var attachments = headerDefs.filter(function(def) {
+      return def.type == 'file' && attachmentVariables.indexOf(def.name) != -1;
+    }).map(function(def) {
+      Logger.log(def);
+      var d = form[def.name];
+      var files = d.split(";").map(function(str) {
+        var token = str.split(':');
+        return {fname: token[0], mimetype: token[1], data: Utilities.base64Decode(token[2])};
+      });
+      return files.map(function(file) {
+        return Utilities.newBlob(file.data, file.mimetype, file.fname);
+      });
+    });
+    MailApp.sendEmail({
+      to: to,
+      subject: title,
+      htmlBody: body,
+      attachments: Array.prototype.concat.apply([], attachments) // flatten
+    });
   });
 }
 
-/** formの情報からセクション名を取り除いたキーのデータを作成する */
-function normalizeData(form) {
-  var data = {};
-  for (var prop in form) {
-    var itemName = prop.split(/_/)[1];
-    data[itemName] = form[prop];
-  }
-  return data;
+/** 拡張情報から値を取得する */
+function getExtInfo(ssId) {
+  var rows = getSheetDataAsArray(ssId, '拡張情報');
+  var values = {};
+  rows.forEach(function(row) {
+    if (row['関数'] !== '') {
+      values[row['項目']] = eval(row['値'])(ssId);
+    } else {
+      var value = row['値'];
+      if (value.getTime) {
+        values[row['項目']] = value.getTime();
+      } else {
+        values[row['項目']] = row['値'];
+      }
+    }
+  });
+  Logger.log(values);
+  return values;
 }
 
 /** テスト用のメソッド.Apps Scriptのエディタから簡単に実行できるように作成した */
 function test() {
-  var ssId = '1PyVzzwhHqp4XDWLq5fXce61DiUDT78Go_f3W_q18Q84';
+  var ssId = '1wmKMViejLkpqOFOY3seY0UPfbYbHFmX70s2MNd40jg0';
   getFormBasicInformation(ssId);
   getDefinition(ssId);
 }
 
 function test2() {
-  var ssId = '1PyVzzwhHqp4XDWLq5fXce61DiUDT78Go_f3W_q18Q84';
-  addData(ssId, {"アンケートタイトル": "あいうえお"});
+  var ssId = '1wmKMViejLkpqOFOY3seY0UPfbYbHFmX70s2MNd40jg0';
+  var values = getExtInfo(ssId);
+  Logger.log(values);
+  //mailData(ssId, {"アンケートタイトル": "あいうえお"});
 }
