@@ -27,10 +27,24 @@
       #progress {
         margin-top: 100px;
       }
+      #container {
+        display: none;
+      }
+      .form-group.required > .control-label:after {
+        content: '必須';
+        color: #a94442;
+        position: absolute;
+        font-size: x-small;
+        white-space: nowrap;
+        top: 10px;
+        right: -7px;
+      }
     </style>
   </head>
   <body>
     <div id="container" class="container">
+    </div>
+    <div class="container">
       <div id="progress" class="progress">
         <div class="progress-bar progress-bar-striped active" style="width: 0%">
           <span class="sr-only">0% Complete</span>
@@ -112,7 +126,7 @@ window.getValue = function(name) {
     var $overlay = $('<div class="loading-overlay"/>').appendTo(document.body);
     var spinner = new Spinner().spin(document.body);
     google.script.run.withSuccessHandler(function() {
-      $('<div class="alert alert-info">登録しました</div>').prependTo('.container');
+      $('<div class="alert alert-info">登録しました</div>').prependTo('#container');
       $form.remove();
       spinner.stop();
       $overlay.remove();
@@ -131,7 +145,7 @@ window.getValue = function(name) {
     return template;
   }
   /** basicInfomation, formDefinitionを元にページを作成する */
-  function buildPage(ssId, bi, fd, extInfo) {
+  function buildPage(ssId, bi, fd, extInfo, formData) {
     /** Formの表示切り替え. showConditionに書かれているJavaScriptを評価して表示非表示を切り替える */
     function switchForm() {
       var defs = fd.filter(function(def) { return !!def.showCondition });
@@ -151,6 +165,10 @@ window.getValue = function(name) {
       });
     }
     var $form = $('<form class="form-horizontal" enctype="multipart/form-data"/>').appendTo($container);
+    var $uuid = $('<input type="hidden" name="uuid"/>').appendTo($form);
+    if (formData) {
+      $uuid.attr('value', formData.uuid);
+    }
     $form.on('keyup', 'input,select', validateElement);
     $form.on('change', 'input,select', validateElement);
     $form.on('keyup', 'input,select', switchForm);
@@ -161,33 +179,60 @@ window.getValue = function(name) {
     $('<h1/>').text(bi.title).appendTo($form);
     // 各項目を作成する
     fd.forEach(function(def, i) {
-      var $formGroup = $('<div class="form-group has-feedback"/>').appendTo($form);
+      var $formGroup = $('<div/>').appendTo($form);
+      if (def.required === true) {
+        $formGroup.addClass('required');
+      }
       $formGroup.popover({
         content: replaceTemplate(def.tooltip, extInfo),
         html: true,
         placement: 'auto bottom',
         trigger: 'hover'
       });
+      def.choices = def.choices || []; // 指定されていない場合にエラーにならないようにする
       if (def.type === 'title') {
         $('<h3/>').attr('name', def.name).text(def.name).appendTo($formGroup);
+      } else if (def.type === 'html') {
+        $formGroup.html(def.bottomHTML);
       } else {
+        $formGroup.addClass('form-group');
         var $label = $('<label class="col-sm-2 control-label"/>').attr('for', def.name).text(def.name).appendTo($formGroup);
         var $formItem = $('<div class="col-sm-10"/>').appendTo($formGroup);
 
-        if (def.type === 'text') {
-          var $input = $('<input type="text" class="form-control"/>').attr('name', def.name).appendTo($formItem);
+        if ('text tel url email password datetime date month week time datetime-local number range color'.split(/ /).includes(def.type)) {
+          var $input = $('<input type="' + def.type + '" class="form-control"/>').attr('name', def.name).appendTo($formItem);
           if (def.required === true) {
             $input.attr('required', true);
           }
-          $('<span class="glyphicon glyphicon-ok form-control-feedback"/>').appendTo($formItem).hide();
-          $('<span class="glyphicon glyphicon-remove form-control-feedback"/>').appendTo($formItem).hide();
-        } else if (def.type === 'number') {
-          var $input = $('<input type="number" class="form-control"/>').attr('name', def.name).appendTo($formItem);
+          if (def.placeholder) {
+            $input.attr('placeholder', def.placeholder);
+          }
+          if (formData && formData[def.name]) {
+            $input.val(formData[def.name]);
+          }
+        } else if (def.type === 'combobox') {
+          var $input = $('<input type="text" class="form-control"/>').attr('name', def.name).attr('list', def.name).appendTo($formItem);
           if (def.required === true) {
             $input.attr('required', true);
           }
-          $('<span class="glyphicon glyphicon-ok form-control-feedback"/>').appendTo($formItem).hide();
-          $('<span class="glyphicon glyphicon-remove form-control-feedback"/>').appendTo($formItem).hide();
+          var $datalist = $('<datalist/>').attr('id', def.name).appendTo($formItem);
+          def.choices.forEach(function(choice) {
+            $('<option/>').attr('value', choice).text(choice).appendTo($datalist);
+          });
+          if (formData && formData[def.name]) {
+            $input.val(formData[def.name]);
+          }
+        } else if (def.type === 'file') {
+          var $input = $('<input type="file" class="form-control" multiple/>').attr('data-refname', def.name).appendTo($formItem);
+          // base64エンコードしたファイルの内容を格納するフィールド
+          $('<input type="hidden" class="form-control"/>').attr('name', def.name).appendTo($formItem);
+          if (def.required === true) {
+            $input.attr('required', true);
+          }
+          // formDataがある場合は編集モードなのでdisabledにする
+          if (formData) {
+            $input.attr('disabled', true);
+          }
         } else if (def.type === 'radio') {
           def.choices.forEach(function(choice) {
             var $radio = $('<div class="radio"/>').appendTo($formItem);
@@ -197,6 +242,9 @@ window.getValue = function(name) {
             if (def.required === true) {
               $input.attr('required', true);
             }
+            if (formData && formData[def.name] === choice) {
+              $input[0].checked = true;
+            }
           });
         } else if (def.type === 'checkbox') {
           def.choices.forEach(function(choice) {
@@ -204,6 +252,9 @@ window.getValue = function(name) {
             var $label = $('<label/>').appendTo($radio);
             var $input = $('<input type="checkbox"/>').attr('name', def.name).attr('value', choice).appendTo($label);
             $('<span/>').text(choice).appendTo($label);
+            if (formData && formData[def.name] === choice) {
+              $input[0].checked = true;
+            }
           });
         } else if (def.type === 'select') {
           var $select = $('<select class="form-control"/>').attr('name', def.name).appendTo($formItem);
@@ -214,15 +265,20 @@ window.getValue = function(name) {
           def.choices.forEach(function(choice) {
             $('<option/>').attr('value', choice).text(choice).appendTo($select);
           });
-        } else if (def.type === 'file') {
-          var $input = $('<input type="file" class="form-control" multiple/>').attr('data-refname', def.name).appendTo($formItem);
-          // base64エンコードしたファイルの内容を格納するフィールド
-          $('<input type="hidden" class="form-control"/>').attr('name', def.name).appendTo($formItem);
-          if (def.required === true) {
-            $input.attr('required', true);
+          if (formData && formData[def.name]) {
+            $select.val(formData[def.name]);
           }
-          $('<span class="glyphicon glyphicon-ok form-control-feedback"/>').appendTo($formItem).hide();
-          $('<span class="glyphicon glyphicon-remove form-control-feedback"/>').appendTo($formItem).hide();
+        } else if (def.type === 'textarea') {
+          var $textarea = $('<textarea class="form-control"/>').attr('name', def.name).appendTo($formItem);
+          if (def.required === true) {
+            $textarea.attr('required', true);
+          }
+          if (def.placeholder) {
+            $textarea.attr('placeholder', def.placeholder);
+          }
+          if (formData && formData[def.name]) {
+            $textarea.val(formData[def.name]);
+          }
         }
 
         if (def.bottomHTML) {
@@ -239,7 +295,9 @@ window.getValue = function(name) {
     // 最初に表示非表示を初期設定するために一度switchFormを呼び出す
     switchForm();
   }
+
   var ssId = '<?= ssId ?>';
+  var uuid = '<?= uuid ?>';
   if (location.href.indexOf('localhost') !== -1) {
     var basicInfomation = {
       title: 'テストタイトル',
@@ -268,17 +326,37 @@ window.getValue = function(name) {
     function failHandler(error) {
       console.error(error);
     }
+    if (uuid === '') {
+      var processes = 3;
+    } else {
+      var processes = 4;
+    }
+    console.log(uuid);
     console.log('call getBasicInformation');
-    google.script.run.withSuccessHandler(function(basicInfomation) {
-      $progress.css('width', '50%');
+    google.script.run.withSuccessHandler(function(basicInformation) {
+      $progress.css('width', 100 / (processes - 1) + '%');
+      if (basicInformation['メンテナンスモード'] === true) {
+        $('body').html('<h1>メンテナンス中です</h1>');
+        return;
+      }
       console.log('call getFormDefinition');
       google.script.run.withSuccessHandler(function(formDefinition) {
-        $progress.css('width', '100%');
+        $progress.css('width', 100 / (processes - 1) * 2 + '%');
         console.log('call getExtInfo');
         google.script.run.withSuccessHandler(function(extInfo) {
-          $progress.parent().hide();
           console.log('buildPage');
-          buildPage(ssId, basicInfomation, formDefinition, extInfo);
+          if (processes - 2 === 3) {
+            $progress.parent().hide();
+            $container.show();
+            buildPage(ssId, basicInformation, formDefinition, extInfo);
+          } else {
+            $progress.css('width', 100 / (processes - 1) * 3 + '%');
+          }
+          google.script.run.withSuccessHandler(function(formData) {
+            $progress.parent().hide();
+            $container.show();
+            buildPage(ssId, basicInformation, formDefinition, extInfo, formData);
+          }).withFailureHandler(failHandler).getFormData(ssId, uuid);
         }).withFailureHandler(failHandler).getExtInfo(ssId);
       }).withFailureHandler(failHandler).getFormDefinition(ssId);
     }).withFailureHandler(failHandler).getBasicInformation(ssId);
