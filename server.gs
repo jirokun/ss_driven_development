@@ -14,9 +14,16 @@ var global = {};
 function doGet(e) {
   var ssId = e.parameter.ssId;
   var uuid = e.parameter.uuid || '';
+  var mode = e.parameter.mode || 'new';
   var t = HtmlService.createTemplateFromFile('Index');
   t.ssId = ssId;
   t.uuid = uuid;
+  t.mode = mode;
+  t.basicInformation = getBasicInformation(ssId);
+  t.formDefinition = getFormDefinition(ssId);
+  t.basicInformation = getBasicInformation(ssId);
+  t.extInfo = getExtInfo(ssId);
+  t.formData = uuid === '' ? null : getFormData(ssId, uuid);
   var bi = getBasicInformation(ssId);
   return t.evaluate()
       .setTitle(bi['タイトル'])
@@ -135,13 +142,26 @@ function saveData(ssId, form) {
   if (!data['作成日時']) {
     data['作成日時'] = new Date();
   }
+  var rowData = dataHeader.map(function(header) { return Array.isArray(data[header]) ? data[header].join(',') : data[header] === undefined ? null : data[header]; });
   if (!data.uuid) {
     data.uuid = Utilities.getUuid();
-    var rowData = dataHeader.map(function(header) { return data[header] || null; });
     sheetData.appendRow(rowData);
   } else {
-    // TODO update row
+    var dataArray = getSheetDataAsArray(ssId, 'データ');
+    var index = findIndex(dataArray, function(data) { return data.uuid === data.uuid; });
+    var range = sheetData.getRange(index + 2, 1, 1, sheetData.getLastColumn());
+    var row = range.getValues()[0];
+    range.setValues([rowData])
   }
+}
+
+function findIndex(arr, cb) {
+  for (var i = 0, len = arr.length; i < len; i++) {
+    if (cb(arr[i])) {
+      return i;
+    }
+  }
+  return -1;
 }
 
 /** formの入力値を取得する. browserでの実行と互換性を持たせるためにメソッド化している */
@@ -171,9 +191,6 @@ function mailData(ssId, form) {
       return def.type == 'file' && attachmentVariables.indexOf(def.name) != -1;
     }).map(function(def) {
       var d = form[def.name];
-      Logger.log(form);
-      Logger.log(def);
-      Logger.log(d);
       var files = d.split(";").map(function(str) {
         var token = str.split(':');
         return {fname: token[0], mimetype: token[1], data: Utilities.base64Decode(token[2])};
@@ -207,7 +224,6 @@ function getExtInfo(ssId) {
       }
     }
   });
-  Logger.log(values);
   return values;
 }
 
@@ -222,5 +238,4 @@ function test2() {
   var ssId = '1wmKMViejLkpqOFOY3seY0UPfbYbHFmX70s2MNd40jg0';
   var values = getExtInfo(ssId);
   Logger.log(values);
-  //mailData(ssId, {"アンケートタイトル": "あいうえお"});
 }

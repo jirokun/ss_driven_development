@@ -27,9 +27,6 @@
       #progress {
         margin-top: 100px;
       }
-      #container {
-        display: none;
-      }
       .form-group.required > .control-label:after {
         content: '必須';
         color: #a94442;
@@ -42,15 +39,7 @@
     </style>
   </head>
   <body>
-    <div id="container" class="container">
-    </div>
-    <div class="container">
-      <div id="progress" class="progress">
-        <div class="progress-bar progress-bar-striped active" style="width: 0%">
-          <span class="sr-only">0% Complete</span>
-        </div>
-      </div>
-    </div>
+    <div id="container" class="container"></div>
     <script src="//ajax.googleapis.com/ajax/libs/jquery/2.2.2/jquery.min.js"></script>
     <script src="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/js/bootstrap.min.js" integrity="sha384-0mSbJDEHialfmuBBQP6A4Qrprq5OVfW37PRR3j5ELqxss1yVqOtnepnHVP9aJ7xS" crossorigin="anonymous"></script>
     <script>
@@ -79,7 +68,6 @@ window.getValue = function(name) {
   var viewId = 'bootstrap-create-horizontal';
   //var viewId = 'bootstrap-create';
   var $container = $('#container');
-  var $progress = $('#progress .progress-bar');
   function validateElement(e) {
     var $formGroup = $(e.target).parents('.form-group');
     $formGroup.removeClass('has-error');
@@ -144,8 +132,26 @@ window.getValue = function(name) {
     }
     return template;
   }
+  function toDateStr(d) {
+    var month = d.getMonth() + 1;
+    var date = d.getDate();
+    if (month < 10) {
+      month = '0' + month.toString();
+    }
+    if (date < 10) {
+      date = '0' + date.toString();
+    }
+    return [d.getFullYear(), month, date].join('-');
+  }
+  function toMonthStr(d) {
+    var month = d.getMonth() + 1;
+    if (month < 10) {
+      month = '0' + month.toString();
+    }
+    return [d.getFullYear(), month].join('-');
+  }
   /** basicInfomation, formDefinitionを元にページを作成する */
-  function buildPage(ssId, bi, fd, extInfo, formData) {
+  function buildPage(mode, ssId, bi, fd, extInfo, formData) {
     /** Formの表示切り替え. showConditionに書かれているJavaScriptを評価して表示非表示を切り替える */
     function switchForm() {
       var defs = fd.filter(function(def) { return !!def.showCondition });
@@ -155,9 +161,13 @@ window.getValue = function(name) {
           if (condition) {
             $('[name="' + def.name + '"]').removeAttr('disabled');
             $('[name="' + def.name + '"]').parents('.form-group').show();
+            $('[name="' + def.name + '__ref"]').removeAttr('disabled');
+            $('[name="' + def.name + '__ref"]').parents('.form-group').show();
           } else {
             $('[name="' + def.name + '"]').attr('disabled', true);
             $('[name="' + def.name + '"]').parents('.form-group').hide();
+            $('[name="' + def.name + '__ref"]').attr('disabled', true);
+            $('[name="' + def.name + '__ref"]').parents('.form-group').hide();
           }
         } catch (e) {
           console.error(e);
@@ -166,7 +176,8 @@ window.getValue = function(name) {
     }
     var $form = $('<form class="form-horizontal" enctype="multipart/form-data"/>').appendTo($container);
     var $uuid = $('<input type="hidden" name="uuid"/>').appendTo($form);
-    if (formData) {
+    var $mode = $('<input type="hidden" name="mode"/>').appendTo($form).attr('value', mode);
+    if (!(mode === 'new' || mode === 'copy') && formData) {
       $uuid.attr('value', formData.uuid);
     }
     $form.on('keyup', 'input,select', validateElement);
@@ -203,12 +214,20 @@ window.getValue = function(name) {
           var $input = $('<input type="' + def.type + '" class="form-control"/>').attr('name', def.name).appendTo($formItem);
           if (def.required === true) {
             $input.attr('required', true);
-          }
+            }
           if (def.placeholder) {
             $input.attr('placeholder', def.placeholder);
           }
           if (formData && formData[def.name]) {
-            $input.val(formData[def.name]);
+            if (def.type === 'date') {
+              var date = new Date(formData[def.name]);
+              $input.val(toDateStr(date));
+            } else if (def.type === 'month') {
+              var date = new Date(formData[def.name]);
+              $input.val(toMonthStr(date));
+            } else {
+              $input.val(formData[def.name]);
+            }
           }
         } else if (def.type === 'combobox') {
           var $input = $('<input type="text" class="form-control"/>').attr('name', def.name).attr('list', def.name).appendTo($formItem);
@@ -223,7 +242,14 @@ window.getValue = function(name) {
             $input.val(formData[def.name]);
           }
         } else if (def.type === 'file') {
-          var $input = $('<input type="file" class="form-control" multiple/>').attr('data-refname', def.name).appendTo($formItem);
+          if (mode === 'edit' || mode === 'show') {
+            $('<p class="form-control-static">新規画面でのみ選択できます</p>').appendTo($formItem);
+            return;
+          }
+          var $input = $('<input type="file" class="form-control" multiple/>')
+            .attr('name', def.name + '__ref')
+            .attr('data-refname', def.name)
+            .appendTo($formItem);
           // base64エンコードしたファイルの内容を格納するフィールド
           $('<input type="hidden" class="form-control"/>').attr('name', def.name).appendTo($formItem);
           if (def.required === true) {
@@ -247,12 +273,17 @@ window.getValue = function(name) {
             }
           });
         } else if (def.type === 'checkbox') {
+          if (formData && formData[def.name]) {
+            var values = formData[def.name].split(/,/);
+          } else {
+            var values = [];
+          }
           def.choices.forEach(function(choice) {
             var $radio = $('<div class="checkbox"/>').appendTo($formItem);
             var $label = $('<label/>').appendTo($radio);
             var $input = $('<input type="checkbox"/>').attr('name', def.name).attr('value', choice).appendTo($label);
             $('<span/>').text(choice).appendTo($label);
-            if (formData && formData[def.name] === choice) {
+            if (values.indexOf(choice) !== -1) {
               $input[0].checked = true;
             }
           });
@@ -296,70 +327,27 @@ window.getValue = function(name) {
     switchForm();
   }
 
+  // ここから実行
   var ssId = '<?= ssId ?>';
   var uuid = '<?= uuid ?>';
-  if (location.href.indexOf('localhost') !== -1) {
-    var basicInfomation = {
-      title: 'テストタイトル',
-      addtionalScript: '',
-      mail: '',
-      mailTitle: ''
-    };
-    var formDefinition = [
-      { name: 'セクション1', type: 'title', tooltip: 'Tooltip' },
-      { name: 'テキスト', type: 'text', required: true, bottomHTML: '納期は${納期計算}です' },
-      { name: 'ラジオ', type: 'radio', required: true, choices: ['選択肢1', '選択肢2'], bottomHTML: '<span style="color: red;">あい</span>うえお', tooltip: 'HOGEHOGE' },
-      { name: 'チェックボックス', type: 'checkbox', required: true, choices: ['選択肢1', '選択肢2'], bottomHTML: '<span style="color: red;">あい</span>うえお' },
-      { name: 'セレクト', type: 'select', required: true, choices: ['選択肢1', '選択肢2'], bottomHTML: '<span style="color: red;">あい</span>うえお' },
-      { name: 'ナンバー', type: 'number', required: true, min: 1, max: 100, bottomHTML: '<span style="color: red;">あい</span>うえお' },
-      { name: 'ファイル', type: 'file', required: true, bottomHTML: '<span style="color: red;">あい</span>うえお' },
-      { name: 'セクション2', type: 'title', showCondition: 'getValue("ラジオ") === "選択肢1"' },
-      { name: 'file2', type: 'file', required: true, bottomHTML: '<span style="color: red;">あい</span>うえお', showCondition: 'getValue("ラジオ") === "選択肢1"' },
-      { name: 'number2', type: 'number', required: true, showCondition: 'getValue("セレクト") === "選択肢1"', tooltip: '<span style="color: red;">This method was tested to work in IE8–IE11 and recent versions of Chrome, Safari, Firefox, and Opera.</span>' },
-    ];
-    var extInfo = {
-      "納期計算": "2016-08-02"
-    };
-    $progress.css('width', '100%');
-    buildPage(ssId, basicInfomation, formDefinition, extInfo);
+  var mode = '<?= mode ?>';
+  var basicInformation = JSON.parse(<?= JSON.stringify(basicInformation) ?>);
+  var formDefinition = JSON.parse(<?= JSON.stringify(formDefinition) ?>);
+  var extInfo = JSON.parse(<?= JSON.stringify(extInfo) ?>);
+  var formData = JSON.parse(<?= JSON.stringify(formData) ?>);
+  if (basicInformation['メンテナンスモード'] === true) {
+    $('body').html('<h1>メンテナンス中です</h1>');
+    return;
+  }
+
+  if ((mode === 'edit' || mode === 'copy' || mode === 'show') && !formData) {
+    $('body').html('<h1>データが存在しません</h1>');
+    return;
+  }
+  if (mode === 'new') {
+    buildPage(mode, ssId, basicInformation, formDefinition, extInfo);
   } else {
-    function failHandler(error) {
-      console.error(error);
-    }
-    if (uuid === '') {
-      var processes = 3;
-    } else {
-      var processes = 4;
-    }
-    console.log(uuid);
-    console.log('call getBasicInformation');
-    google.script.run.withSuccessHandler(function(basicInformation) {
-      $progress.css('width', 100 / (processes - 1) + '%');
-      if (basicInformation['メンテナンスモード'] === true) {
-        $('body').html('<h1>メンテナンス中です</h1>');
-        return;
-      }
-      console.log('call getFormDefinition');
-      google.script.run.withSuccessHandler(function(formDefinition) {
-        $progress.css('width', 100 / (processes - 1) * 2 + '%');
-        console.log('call getExtInfo');
-        google.script.run.withSuccessHandler(function(extInfo) {
-          console.log('buildPage');
-          if (processes - 2 === 3) {
-            $progress.parent().hide();
-            $container.show();
-            buildPage(ssId, basicInformation, formDefinition, extInfo);
-          } else {
-            $progress.css('width', 100 / (processes - 1) * 3 + '%');
-          }
-          google.script.run.withSuccessHandler(function(formData) {
-            $progress.parent().hide();
-            $container.show();
-            buildPage(ssId, basicInformation, formDefinition, extInfo, formData);
-          }).withFailureHandler(failHandler).getFormData(ssId, uuid);
-        }).withFailureHandler(failHandler).getExtInfo(ssId);
-      }).withFailureHandler(failHandler).getFormDefinition(ssId);
-    }).withFailureHandler(failHandler).getBasicInformation(ssId);
+    buildPage(mode, ssId, basicInformation, formDefinition, extInfo, formData);
   }
 })();
     </script>
