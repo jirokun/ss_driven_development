@@ -4,6 +4,7 @@ var mapping = {
   '必須': 'required',
   '選択肢': 'choices',
   '表示条件': 'showCondition',
+  'スタイル': 'style',
   'プレースホルダ': 'placeholder',
   '下部に表示するテキスト': 'bottomHTML',
   'ポップアップで表示するテキスト': 'tooltip'
@@ -59,8 +60,8 @@ function getFormDefinition(ssId) {
     row.forEach(function(cell, i) {
       value[mapping[header[i]]] = row[i];
     });
-    value.required = value.required == null || value.required != '';
-    value.choices = value.choices ? replaceTemplate(value.choices, extInfo).split(',') : null;
+    value.required = value.required === null || value.required !== '';
+    value.choices = value.choices ? replaceTemplate(value.choices, [extInfo]).split(',') : null;
   });
   return values;
 }
@@ -89,7 +90,7 @@ function getFormData(ssId, uuid) {
   var values = getSheetDataAsArray(ssId, 'データ');
   for (var i = 0, len = values.length; i < len; i++) {
     var element = values[i];
-    if (element['uuid'] === uuid) {
+    if (element.uuid === uuid) {
       return dataConvertor(element);
     }
   }
@@ -111,21 +112,67 @@ function dataConvertor(data) {
 
 /** HTMLから呼ばれるメソッド. フォームのsubmit処理 */
 function submitForm(form) {
-  saveData(form.ssId, form);
-  mailData(form.ssId, form);
+  var currentData, diff;
+  var isNew = !form.uuid;
+  if (!isNew) {
+    currentData = getFormData(form.ssId, form.uuid);
+    var headerDefs = getFormDefinition(form.ssId);
+    diff = diffRow(headerDefs, currentData, form);
+  }
+  saveData(form.ssId, form, currentData, isNew);
+  mailData(form.ssId, form, diff, isNew);
 }
-/** 文字列置換をおこなう */
-function replaceTemplate(template, extInfo) {
-  if (template == undefined) {
+/** 文字列置換をおこなう。 */
+function replaceTemplate(template, values) {
+  if (template === undefined) {
     return undefined;
   }
-  for (var prop in extInfo) {
-    var target = '${' + prop + '}';
-    while (template.indexOf(target, 0) !== -1 ) {
-      template = template.replace(target, extInfo[prop]);
+  values.forEach(function(obj) {
+    for (var prop in obj) {
+      var target = '${' + prop + '}';
+      while (template.indexOf(target, 0) !== -1 ) {
+        template = template.replace(target, obj[prop]);
+      }
     }
-  }
+  });
   return template;
+}
+function toDateStr(d) {
+  var month = d.getMonth() + 1;
+  var date = d.getDate();
+  if (month < 10) {
+    month = '0' + month.toString();
+  }
+  if (date < 10) {
+    date = '0' + date.toString();
+  }
+  return [d.getFullYear(), month, date].join('-');
+}
+function toMonthStr(d) {
+  var month = d.getMonth() + 1;
+  if (month < 10) {
+    month = '0' + month.toString();
+  }
+  return [d.getFullYear(), month].join('-');
+}
+function countMonthNo(ssId, dataArray) {
+  var currentDate = getCurrentDate(ssId);
+  var startMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
+  var counter = 1;  
+  dataArray.forEach(function(data) {
+    if (data['作成日時'] >= startMonth.getTime()) {
+      counter++;
+    }
+  });
+  return counter;
+}
+function getCurrentDate(ssId) {
+  var basicInformation = getBasicInformation(ssId);
+  var currentDate = basicInformation['現在時刻'];
+  if (currentDate) {
+    return currentDate;
+  }
+  return new Date();
 }
 
 /**
@@ -133,26 +180,58 @@ function replaceTemplate(template, extInfo) {
  * uuidがなければSpreadsheetのデータシートにデータを追加
  * uuidがあればSpreadsheetのデータシートにデータを更新
  */
-function saveData(ssId, form) {
-  var data = form;
+function saveData(ssId, form, currentData, isNew) {
+  var rowData;
+  form['更新日時'] = getCurrentDate(ssId);
   var ss = SpreadsheetApp.openById(ssId);
   var sheetData = ss.getSheetByName('データ');
-  var headerDefs = getFormDefinition(ssId);
-  var dataHeader = sheetData.getRange(1, 1, 1, sheetData.getLastColumn()).getValues()[0];
-  if (!data['作成日時']) {
-    data['作成日時'] = new Date();
-  }
-  var rowData = dataHeader.map(function(header) { return Array.isArray(data[header]) ? data[header].join(',') : data[header] === undefined ? null : data[header]; });
-  if (!data.uuid) {
-    data.uuid = Utilities.getUuid();
+  var dataArray = getSheetDataAsArray(ssId, 'データ');
+  if (isNew) {
+    form['作成日時'] = form['更新日時'];
+    form.uuid = Utilities.getUuid();
+    var monthNo = countMonthNo(ssId, dataArray);
+    form.MONTH_NO = monthNo;
+    rowData = convertData2Row(sheetData, ssId, form);
     sheetData.appendRow(rowData);
   } else {
-    var dataArray = getSheetDataAsArray(ssId, 'データ');
-    var index = findIndex(dataArray, function(data) { return data.uuid === data.uuid; });
+    form['作成日時'] = new Date(currentData['作成日時']); // 作成日時は変更しない
+    var index = findIndex(dataArray, function(row) { return row.uuid === form.uuid; });
     var range = sheetData.getRange(index + 2, 1, 1, sheetData.getLastColumn());
     var row = range.getValues()[0];
-    range.setValues([rowData])
+    rowData = convertData2Row(sheetData, ssId, form);
+    // rangeを取得した時とsetValuesしたときでは行が変わる可能性があるので、データシートではappendRowのみ許し、insertは禁止する
+    range.setValues([rowData]);
   }
+}
+
+/** formのデータをSpreadSheetのRowに変換する */
+function convertData2Row(sheetData, ssId, form) {
+  var dataHeader = sheetData.getRange(1, 1, 1, sheetData.getLastColumn()).getValues()[0];
+  var headerDefs = getFormDefinition(ssId);
+
+  return dataHeader.map(function(header) {
+    var def = getHeaderDef(headerDefs, header);
+    if (!!def && def.type === 'file') {
+      return null;
+    }
+    if (Array.isArray(form[header])) {
+      return form[header].join(',');
+    } else {
+      if (form[header] === undefined) {
+        return null;
+      } else {
+        return form[header];
+      }
+    }
+  });
+}
+
+/** 名前からカラムの定義を取得する */
+function getHeaderDef(headerDefs, name) {
+  var index = findIndex(headerDefs, function(def) {
+    return def.name === name;
+  });
+  return headerDefs[index];
 }
 
 function findIndex(arr, cb) {
@@ -170,25 +249,29 @@ function getValue(name) {
 }
 
 /** HTMLから呼ばれるメソッド. フォームのデータをメールする */
-function mailData(ssId, form) {
+function mailData(ssId, form, diff, isNew) {
   global.form = form;
+  var extInfo = getExtInfo(ssId);
+  var translateArr = [form, extInfo, {
+    isNew: isNew,
+    url: ScriptApp.getService().getUrl(),
+    diffHTML: diffHTML(diff)
+  }];
   var mailDefs = getSheetDataAsArray(ssId, 'メール定義');
   var enabledMail = mailDefs.filter(function(def) {
-    var condition = def['送信条件'];
+    var condition = replaceTemplate(def['送信条件'], translateArr);
     return eval(condition);
   });
-  var extInfo = getExtInfo(ssId);
+  var headerDefs = getFormDefinition(ssId);
   enabledMail.forEach(function(def) {
-    var title = def['タイトル'];
-    var to = def['宛先'];
-    var body = def['本文'];
+    var title = replaceTemplate(def['タイトル'], translateArr);
+    var to = replaceTemplate(def['宛先'], translateArr);
+    Logger.log(to);
+    var body = replaceTemplate(def['本文'], translateArr);
+    Logger.log(body)
     var attachmentVariables = def['添付ファイル'].split(/,/);
-    // 本文のテンプレート文字を置き換える
-    body = replaceTemplate(body, form);
-    body = replaceTemplate(body, extInfo);
-    var headerDefs = getFormDefinition(ssId);
     var attachments = headerDefs.filter(function(def) {
-      return def.type == 'file' && attachmentVariables.indexOf(def.name) != -1;
+      return def.type == 'file' && attachmentVariables.indexOf(def.name) != -1 && form[def.name];
     }).map(function(def) {
       var d = form[def.name];
       var files = d.split(";").map(function(str) {
@@ -227,15 +310,54 @@ function getExtInfo(ssId) {
   return values;
 }
 
-/** テスト用のメソッド.Apps Scriptのエディタから簡単に実行できるように作成した */
-function test() {
-  var ssId = '1wmKMViejLkpqOFOY3seY0UPfbYbHFmX70s2MNd40jg0';
-  getFormBasicInformation(ssId);
-  getDefinition(ssId);
+/** 変更点だけを抽出する */
+function diffRow(headerDefs, oldRow, newRow) {
+  var diff = [], props = [], prop;
+  for (prop in oldRow) {
+    if (props.indexOf(prop) !== -1) continue;
+    props.push(prop);
+  }
+  for (prop in newRow) {
+    if (props.indexOf(prop) !== -1) continue;
+    props.push(prop);
+  }
+  props.forEach(function(prop) {
+    if (prop === '更新日時' || prop === '作成日時' || prop === 'mode' || prop === 'ssId') return; // 管理項目はスキップ
+    // undefinedを潰す
+    var oldValue = oldRow[prop] === undefined ? '': oldRow[prop];
+    var newValue = newRow[prop] === undefined ? '': newRow[prop];
+    // 数値をintegerに変換できるものは変換する
+    oldValue = isInt(oldValue) ? parseInt(oldValue) : oldValue;
+    newValue = isInt(newValue) ? parseInt(newValue) : newValue;
+    // 日付は文字列に変換する
+    var def = getHeaderDef(headerDefs, prop);
+    if (def && def.type === 'date' && !!oldValue) {
+      oldValue = toDateStr(new Date(oldValue));
+    }
+    if (oldValue == newValue) {
+      return;
+    }
+    diff.push({key: prop, oldValue: oldValue, newValue: newValue});
+  });
+  return diff;
 }
 
-function test2() {
-  var ssId = '1wmKMViejLkpqOFOY3seY0UPfbYbHFmX70s2MNd40jg0';
-  var values = getExtInfo(ssId);
-  Logger.log(values);
+function isInt(val) {
+  return parseInt(val, 10) === val;
 }
+
+/** diffの結果をHTMLのTableに変換する */
+function diffHTML(diff) {
+  if (!diff) return null;
+  var html = '<table style="border-collapse: collapse;"><tr><th style="border: 1px solid #ccc;">項目</th><th style="border: 1px solid #ccc;">変更前</th><th style="border: 1px solid #ccc;">変更後</th></tr>';
+  html += diff.map(function(d) { return '<tr><td style="border: 1px solid #ccc;">' + d.key + '</td><td style="border: 1px solid #ccc;">' + d.oldValue + '</td><td style="border: 1px solid #ccc;">' + d.newValue + '</td></tr>'; }).join('');
+  html += '</table>';
+  return html;
+}
+
+/** テスト用のメソッド.Apps Scriptのエディタから簡単に実行できるように作成した */
+function test() {
+  var result = diffRow({}, {a: 1471532400000, b: 'b'}, {a: 'a', b: 'b'});
+  Logger.log(result);
+}
+

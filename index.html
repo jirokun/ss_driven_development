@@ -23,6 +23,7 @@
         left: 0;
         opacity: 0.5;
         background-color: #000;
+        z-index: 9999;
       }
       #progress {
         margin-top: 100px;
@@ -35,6 +36,21 @@
         white-space: nowrap;
         top: 10px;
         right: -7px;
+      }
+      .bottom {
+        position: fixed;
+        top: auto;
+        margin-bottom: 0;
+        bottom: 0;
+        padding: 5px;
+        min-height: 0;
+        box-shadow: inset 0 1px 0 rgba(255,255,255,.15),0 -3px 5px rgba(0,0,0,.075);
+      }
+      .bottom .btn {
+        margin-right: 10px;
+      }
+      #container {
+        margin-bottom: 50px;
       }
     </style>
   </head>
@@ -120,16 +136,19 @@ window.getValue = function(name) {
       $overlay.remove();
     }).submitForm(e.target);
   }
-  function replaceTemplate(template, extInfo) {
-    if (template == undefined) {
+  /** 文字列置換をおこなう。 */
+  function replaceTemplate(template, values) {
+    if (template === undefined) {
       return undefined;
     }
-    for (var prop in extInfo) {
-      var target = '${' + prop + '}';
-      while (template.indexOf(target, 0) !== -1 ) {
-        template = template.replace(target, extInfo[prop]);
+    values.forEach(function(obj) {
+      for (var prop in obj) {
+        var target = '${' + prop + '}';
+        while (template.indexOf(target, 0) !== -1 ) {
+          template = template.replace(target, obj[prop]);
+        }
       }
-    }
+    });
     return template;
   }
   function toDateStr(d) {
@@ -149,6 +168,18 @@ window.getValue = function(name) {
       month = '0' + month.toString();
     }
     return [d.getFullYear(), month].join('-');
+  }
+  /** スタイル文字列からスタイルを設定する */
+  function setStyle($el, style) {
+    if (!style) return;
+    style.split(/;/).forEach(function(line) {
+      var trimedLine = line.trim();
+      if (trimedLine === '') {
+        return;
+      }
+      var tokens = trimedLine.split(/:/);
+      $el.css(tokens[0], tokens[1]);
+    });
   }
   /** basicInfomation, formDefinitionを元にページを作成する */
   function buildPage(mode, ssId, bi, fd, extInfo, formData) {
@@ -188,14 +219,19 @@ window.getValue = function(name) {
     $form.on('submit', onSubmit);
     $('<input name="ssId" type="hidden"/>').attr('value', ssId).appendTo($form);
     $('<h1/>').text(bi.title).appendTo($form);
+    var modeLabel;
+    if (mode === 'copy' || mode === 'new') modeLabel = '新規作成';
+    if (mode === 'edit') modeLabel = '編集';
+    $('<span class="mode label label-success"/>').text('MODE: ' + modeLabel).appendTo($form);
     // 各項目を作成する
     fd.forEach(function(def, i) {
       var $formGroup = $('<div/>').appendTo($form);
       if (def.required === true) {
         $formGroup.addClass('required');
       }
+      var replaceArr = [extInfo, {ssId: ssId, uuid: uuid}];
       $formGroup.popover({
-        content: replaceTemplate(def.tooltip, extInfo),
+        content: replaceTemplate(def.tooltip, replaceArr),
         html: true,
         placement: 'auto bottom',
         trigger: 'hover'
@@ -204,7 +240,7 @@ window.getValue = function(name) {
       if (def.type === 'title') {
         $('<h3/>').attr('name', def.name).text(def.name).appendTo($formGroup);
       } else if (def.type === 'html') {
-        $formGroup.html(def.bottomHTML);
+        $formGroup.html(replaceTemplate(def.bottomHTML, replaceArr));
       } else {
         $formGroup.addClass('form-group');
         var $label = $('<label class="col-sm-2 control-label"/>').attr('for', def.name).text(def.name).appendTo($formGroup);
@@ -310,21 +346,29 @@ window.getValue = function(name) {
           if (formData && formData[def.name]) {
             $textarea.val(formData[def.name]);
           }
+          setStyle($textarea, def.style);
         }
 
         if (def.bottomHTML) {
-          $('<span class="help-block"/>').html(replaceTemplate(def.bottomHTML, extInfo)).appendTo($formItem);
+          $('<span class="help-block"/>').html(replaceTemplate(def.bottomHTML, [extInfo, {ssId: ssId, uuid: uuid}])).appendTo($formItem);
         }
       }
     });
     // サブミットボタンを作成する。上記の各項目と名前がぶつからないように匿名関数で囲っている
     (function() {
-      var $formGroup = $('<div class="form-group"/>').appendTo($form);
-      var $formItem = $('<div class="col-sm-offset-2 col-sm-10"/>').appendTo($formGroup);
-      var $submitButton = $('<button type="submit" class="btn btn-primary">送信</button>').appendTo($formItem);
+      var $bottomContainer = $('<div class="navbar navbar-default navbar-fixed-top bottom"/>').appendTo($form);
+      var $buttonContainer = $('<div class="container"/>').appendTo($bottomContainer);
+      var $formItem = $('<div class="col-sm-offset-2 col-sm-10"/>').appendTo($buttonContainer);
+      $('<button type="submit" class="btn btn-primary">送信</button>').appendTo($formItem);
+      if (mode === 'edit') {
+        $('<a href="' + extInfo.BASE_URL + '?ssId=' + ssId + '&uuid=' + uuid + '&mode=copy" class="btn btn-success">コピー</a>').appendTo($formItem);
+      }
     })();
     // 最初に表示非表示を初期設定するために一度switchFormを呼び出す
     switchForm();
+  }
+  window.getExtInfo = function(name) {
+    return extInfo[name];
   }
 
   // ここから実行
