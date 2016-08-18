@@ -50,7 +50,7 @@
         margin-right: 10px;
       }
       #container {
-        margin-bottom: 50px;
+        margin-bottom: 20px;
       }
     </style>
   </head>
@@ -359,10 +359,13 @@ window.getValue = function(name) {
       var $bottomContainer = $('<div class="navbar navbar-default navbar-fixed-top bottom"/>').appendTo($form);
       var $buttonContainer = $('<div class="container"/>').appendTo($bottomContainer);
       var $formItem = $('<div class="col-sm-offset-2 col-sm-10"/>').appendTo($buttonContainer);
-      $('<button type="submit" class="btn btn-primary">送信</button>').appendTo($formItem);
+      var defaultLabel = mode === 'edit' ? '更新' : '新規作成';
+      $('<button type="submit" class="btn btn-primary"/>').appendTo($formItem).html(basicInformation['SUBMITボタンHTML'] || defaultLabel);
       if (mode === 'edit') {
-        $('<a href="' + extInfo.BASE_URL + '?ssId=' + ssId + '&uuid=' + uuid + '&mode=copy" class="btn btn-success">コピー</a>').appendTo($formItem);
+        $('<a href="' + extInfo.BASE_URL + '?ssId=' + ssId + '&uuid=' + uuid + '&mode=copy" class="btn btn-success"/>').appendTo($formItem).
+          html(basicInformation['COPYボタンHTML'] || 'コピー');
       }
+      $form.css('margin-bottom', $bottomContainer.height() + 'px');
     })();
     // 最初に表示非表示を初期設定するために一度switchFormを呼び出す
     switchForm();
