@@ -1,3 +1,7 @@
+/**
+ * required librarey
+ * moment.js as Momemnt
+ */
 var mapping = {
   '項目名': 'name',
   'タイプ': 'type',
@@ -137,6 +141,20 @@ function replaceTemplate(template, values) {
   });
   return template;
 }
+/** HtmlServiceで文字列置換をおこなう。 */
+function evaluateMailTemplate(template, values) {
+  if (template === undefined) {
+    return undefined;
+  }
+  var t = HtmlService.createTemplate(template);
+  
+  values.forEach(function(obj) {
+    for (var prop in obj) {
+      t[prop] = obj[prop];
+    }
+  });
+  return t.evaluate().getContent();
+}
 function toDateStr(d) {
   var month = d.getMonth() + 1;
   var date = d.getDate();
@@ -155,6 +173,9 @@ function toMonthStr(d) {
   }
   return [d.getFullYear(), month].join('-');
 }
+function nextSequenceNo(dataArray) {
+  return dataArray.length + 1;
+}
 function countMonthNo(ssId, dataArray) {
   var currentDate = getCurrentDate(ssId);
   var startMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
@@ -164,7 +185,7 @@ function countMonthNo(ssId, dataArray) {
       counter++;
     }
   });
-  return counter;
+  return Utilities.formatString('%3d', counter);
 }
 function getCurrentDate(ssId) {
   var basicInformation = getBasicInformation(ssId);
@@ -183,14 +204,15 @@ function getCurrentDate(ssId) {
 function saveData(ssId, form, currentData, isNew) {
   var rowData;
   form['更新日時'] = getCurrentDate(ssId);
+  form['最終更新者'] = Session.getActiveUser().getEmail();
   var ss = SpreadsheetApp.openById(ssId);
   var sheetData = ss.getSheetByName('データ');
   var dataArray = getSheetDataAsArray(ssId, 'データ');
   if (isNew) {
     form['作成日時'] = form['更新日時'];
     form.uuid = Utilities.getUuid();
-    var monthNo = countMonthNo(ssId, dataArray);
-    form.MONTH_NO = monthNo;
+    form.NO = nextSequenceNo(dataArray);
+    form.MONTH_NO = countMonthNo(ssId, dataArray);
     rowData = convertData2Row(sheetData, ssId, form);
     sheetData.appendRow(rowData);
   } else {
@@ -212,7 +234,10 @@ function convertData2Row(sheetData, ssId, form) {
   return dataHeader.map(function(header) {
     var def = getHeaderDef(headerDefs, header);
     if (!!def && def.type === 'file') {
-      return null;
+      var files = parseAttachments(form[header]);
+      var fileNames = files.map(function(file) { return file.fname; }).join('\n');
+      form[header + '_filenames'] = fileNames;
+      return fileNames;
     }
     if (Array.isArray(form[header])) {
       return form[header].join(',');
@@ -266,28 +291,43 @@ function mailData(ssId, form, diff, isNew) {
   enabledMail.forEach(function(def) {
     var title = replaceTemplate(def['タイトル'], translateArr);
     var to = replaceTemplate(def['宛先'], translateArr);
-    Logger.log(to);
-    var body = replaceTemplate(def['本文'], translateArr);
-    Logger.log(body)
+    var cc = replaceTemplate(def['CC'], translateArr);
+    var body = evaluateMailTemplate(replaceTemplate(def['本文'], translateArr), translateArr);
     var attachmentVariables = def['添付ファイル'].split(/,/);
     var attachments = headerDefs.filter(function(def) {
       return def.type == 'file' && attachmentVariables.indexOf(def.name) != -1 && form[def.name];
     }).map(function(def) {
-      var d = form[def.name];
-      var files = d.split(";").map(function(str) {
-        var token = str.split(':');
-        return {fname: token[0], mimetype: token[1], data: Utilities.base64Decode(token[2])};
-      });
+      var files = parseAttachments(form[def.name]);
       return files.map(function(file) {
         return Utilities.newBlob(file.data, file.mimetype, file.fname);
       });
     });
-    MailApp.sendEmail({
-      to: to,
-      subject: title,
-      htmlBody: body,
-      attachments: Array.prototype.concat.apply([], attachments) // flatten
-    });
+    if (def['タイプ'] === 'HTML') {
+      MailApp.sendEmail({
+        to: to,
+        cc: cc,
+        subject: title,
+        htmlBody: body,
+        attachments: Array.prototype.concat.apply([], attachments) // flatten
+      });
+    } else {
+      MailApp.sendEmail({
+        to: to,
+        cc: cc,
+        subject: title,
+        body: body,
+        attachments: Array.prototype.concat.apply([], attachments) // flatten
+      });
+    }      
+  });
+}
+
+function parseAttachments(value) {
+  Logger.log(value);
+  if (!value) return [];
+  return files = value.split(";").map(function(str) {
+    var token = str.split(':');
+    return {fname: token[0], mimetype: token[1], data: Utilities.base64Decode(token[2])};
   });
 }
 
@@ -357,7 +397,7 @@ function diffHTML(diff) {
 
 /** テスト用のメソッド.Apps Scriptのエディタから簡単に実行できるように作成した */
 function test() {
-  var result = diffRow({}, {a: 1471532400000, b: 'b'}, {a: 'a', b: 'b'});
-  Logger.log(result);
+  var moment = Moment.moment;
+  Logger.log(moment().format());
 }
 
